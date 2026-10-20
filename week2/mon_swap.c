@@ -11,7 +11,7 @@ int main()
 {
     int a = 10, b = 20;
     printf("Before swap: a = %d, b = %d\n", a, b);
-    swap_c(&a, &b);/* 必须传地址 */
+    swap_c(&a, &b); /* 必须传地址 */
     printf("After swap: a = %d, b = %d\n", a, b);
     return 0;
 }
