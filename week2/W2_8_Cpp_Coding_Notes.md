@@ -1740,10 +1740,827 @@ int* sortedSquares(int* nums, int numsSize, int* returnSize) {
 
 ---
 
-## 第二周（Day 4）：const 成员函数 📝 待补充
+## 第二周（Day 4）：const 成员函数 
 
-> 今天学习类中 const 成员函数、const 对象、mutable 关键字。
-> C 语言穿插：用 struct 模拟 const 行为。
+### 一、const 成员函数与 const 对象（主线）
+
+#### 1.1 今天站在昨天的肩膀上
+
+昨天你学会了给**指针**加锁：`const int *p` 表示"不能改指向的值"。
+今天换个场景：**对象**也可以加锁。一个被 `const` 修饰的对象，只允许调用"承诺不改对象"的成员函数，这种函数就叫 **`const` 成员函数**。
+
+> 昨天的口诀"const 离谁近锁住谁"今天升级：
+> `const` 放在**成员函数声明的末尾** → 锁住"这个成员函数不能修改对象本身"。
+
+#### 1.2 核心语法
+
+```cpp
+class Point {
+private:
+    int x, y;
+public:
+    Point(int x, int y) : x(x), y(y) {}
+
+    int getX() const { return x; }   // ✅ const 成员函数：只读，不修改对象
+    void setX(int v)   { x = v; }    // 普通成员函数：可以修改对象
+};
+```
+
+**关键点：**
+
+- `const` 放在函数参数列表**后面**、函数体**前面**。
+- 在 `const` 成员函数内部，**不能修改任何成员变量**（除非成员变量被声明为 `mutable`）。
+- `const` 成员函数**可以重载**普通版本（同名、参数相同、一个有 const 一个没有）。
+
+#### 1.3 const 对象只能调用 const 成员函数
+
+```cpp
+const Point p(3, 4);   // const 对象
+p.getX();              // ✅ OK：getX 是 const 成员函数
+// p.setX(5);          // ❌ 编译错误：const 对象不能调用非 const 成员函数
+```
+
+而普通对象两者都能调用：
+
+```cpp
+Point q(1, 2);
+q.getX();              // ✅ OK
+q.setX(10);            // ✅ OK
+```
+
+#### 1.4 为什么需要 const 成员函数？
+
+**保护 + 自文档化 + 接口清晰。** 最常见的用途是作参数：
+
+```cpp
+// 接收一个 Point，但承诺"我只读、绝不改你"
+void printPoint(const Point &p) {
+    cout << p.getX() << endl;   // ✅ getX 是 const 的，可以调
+    // p.setX(5);               // ❌ 编译错误
+}
+```
+
+> 如果 `getX` 不是 `const` 的，上面这个函数就编不过——因为 `const Point &` 只能调 `const` 成员函数。
+> 这正好呼应昨天你学的"函数参数用 `const int *p` 最安全"：这里用 `const Point &` 是同一个道理，只是换成了对象。
+
+#### 1.5 动手实验：写 Point 类验证（今日必做产出） ✍️
+
+新建 `week2/thu_const_member.cpp`：
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Point {
+private:
+    int x_, y_;
+public:
+    Point(int x, int y) : x_(x), y_(y) {}
+
+    // const 成员函数：只读
+    int getX() const { return x_; }
+    int getY() const { return y_; }
+
+    // 非 const 成员函数：可修改
+    void setX(int x) { x_ = x; }
+    void setY(int y) { y_ = y; }
+
+    // const 成员函数里试图修改 → 编译错误（取消下面注释验证）
+    // void tryModify() const { x_ = 100; }
+};
+
+int main() {
+    Point a(3, 4);
+    const Point b(10, 20);   // const 对象
+
+    cout << "a.x = " << a.getX() << endl;   // ✅
+    a.setX(99);                             // ✅ 普通对象可调非 const
+    cout << "a.x after setX = " << a.getX() << endl;
+
+    cout << "b.x = " << b.getX() << endl;   // ✅ const 对象可调 const 成员函数
+    // b.setX(1);                           // ❌ 取消注释 → 报错：const 对象不能调非 const
+
+    return 0;
+}
+```
+
+![](../assets/DvlKr0OZTv.png)
+
+![](../assets/kaox1sxWmo.png)
+
+#### 1.6 自测 3 个问题（写进笔记）
+
+1. `int getX() const` 末尾这个 `const` 锁住了什么？
+   **锁住了成员变量 x_，使得成员函数无法修改成员变量，只能读取。**
+2. 普通对象能调用 `const` 成员函数吗？反过来呢（const 对象调非 const 函数）？
+   **可以，不行，哪怕是非 const 函数并不涉及修改变量也不行。**
+3. 写一个函数 `void dump(const Point &p)`，内部打印 `p.getX()`——为什么 `getX` 必须是 `const` 的？
+   **不行，const 对象只能调用 const 函数。**
+
+------
+
+### 二、延伸一：函数重载与运算符重载
+
+#### 2.1 什么是重载
+
+"重载"是面向对象编程（尤其是 C++、Java、C# 等语言）中一个非常重要的概念，指的是**在同一个作用域内，允许多个函数或运算符拥有相同的名称，但具有不同的参数列表（参数个数、类型或顺序不同）**。编译器会根据调用时传入的参数来决定具体调用哪一个版本，这个过程发生在编译期，属于**静态多态**。
+
+#### 2.2 函数重载的核心规则
+
+- 函数名相同
+- 参数列表必须不同（参数个数不同，或参数类型不同，或参数顺序不同）
+- 返回值类型**可以不同**，但**不能仅靠返回值类型区分**（因为调用时可能不关心返回值，导致歧义）
+
+#### 2.3 函数重载示例
+
+```cpp
+#include <iostream>
+using namespace std;
+
+void print(int x) {
+    cout << "Integer: " << x << endl;
+}
+void print(double x) {
+    cout << "Double: " << x << endl;
+}
+void print(const char* str) {
+    cout << "String: " << str << endl;
+}
+void print(int a, int b) {
+    cout << "Two integers: " << a << ", " << b << endl;
+}
+
+int main() {
+    print(42);          // 调用 print(int)
+    print(3.14);        // 调用 print(double)
+    print("Hello");      // 调用 print(const char*)
+    print(1, 2);        // 调用 print(int, int)
+    return 0;
+}
+```
+
+#### 2.4 注意事项
+
+- **参数类型匹配**：编译器会寻找最佳匹配，必要时会进行隐式类型转换（如 `int` 转 `double`），但可能引起歧义。
+
+- **默认参数**：重载与默认参数一起使用时需小心，可能导致二义性。例如：
+
+  ```cpp
+  void func(int a);
+  void func(int a, int b = 10);  // 调用 func(5) 时，两个都能匹配，编译错误
+  ```
+
+- **const 限定**：对于成员函数，`const` 版本和非 `const` 版本可以构成重载（因为 `this` 指针类型不同）。
+
+#### 2.5 运算符重载
+
+运算符重载是函数重载的一种特殊形式，允许用户自定义类型（如类）使用已有的运算符（`+`, `-`, `*`, `<<` 等）时表现出特定的行为。
+
+```cpp
+class Complex {
+public:
+    double real, imag;
+    Complex(double r = 0, double i = 0) : real(r), imag(i) {}
+
+    // 重载 + 运算符
+    Complex operator+(const Complex& other) const {
+        return Complex(real + other.real, imag + other.imag);
+    }
+};
+
+int main() {
+    Complex c1(1, 2), c2(3, 4);
+    Complex c3 = c1 + c2;  // 实际调用 c1.operator+(c2)
+    return 0;
+}
+```
+
+运算符重载的本质也是函数重载——`operator+` 就是一个特殊的函数名。C++ 中大部分运算符都可以重载，但有一些不能（如 `::`, `.*`, `?:` 等）。
+
+#### 2.6 为什么要使用重载？
+
+1. **提高代码可读性**：用同一个名字表示"同一类操作"，比如 `print` 可以打印不同类型的数据，比分别命名 `printInt`, `printDouble`, `printString` 更自然。
+2. **简化接口**：让用户无需记忆多个函数名，只需根据传入参数的不同自动匹配。
+3. **实现泛型思想**：虽然 C++ 有模板，但重载也是一种轻量级的"多态"手段。
+4. **运算符重载使自定义类型表现得更像内置类型**，例如 `string` 的 `+` 拼接，`vector` 的 `[]` 访问。
+
+#### 2.7 重载与覆盖、隐藏的区别
+
+| 概念                 | 作用域                   | 参数列表     | 关键字    | 决定时机           |
+| -------------------- | ------------------------ | ------------ | --------- | ------------------ |
+| **重载**             | 同一作用域（同一个类内） | 必须不同     | 无        | 编译期             |
+| **覆盖（Override）** | 派生类覆盖基类的虚函数   | 必须完全相同 | `virtual` | 运行期（动态绑定） |
+| **隐藏（Hide）**     | 派生类屏蔽基类的同名函数 | 可相同可不同 | 无        | 编译期（名字查找） |
+
+------
+
+### 三、延伸二：构造函数与初始化列表
+
+#### 3.1 `Point(int x, int y) : x_(x), y_(y) {}` 是什么？
+
+这是**构造函数（Constructor）**。
+
+**它干了什么：**
+
+```cpp
+Point p(10, 20);  // 创建对象时自动调用
+```
+
+调用过程等价于：
+
+1. 分配 `p` 的内存
+2. **初始化列表** `: x_(x), y_(y)` 把 `x_` 初始化为 `10`，`y_` 初始化为 `20`
+3. 进入函数体 `{}`（这里为空，啥也不做）
+
+#### 3.2 为什么用初始化列表而不是赋值？
+
+```cpp
+// 方式A：初始化列表（推荐）
+Point(int x, int y) : x_(x), y_(y) {}
+
+// 方式B：函数体内赋值
+Point(int x, int y) { x_ = x; y_ = y; }
+```
+
+区别：
+
+|            | 初始化列表               | 函数体内赋值               |
+| ---------- | ------------------------ | -------------------------- |
+| 执行时机   | 对象创建时**直接初始化** | 先默认构造，再**赋值覆盖** |
+| 效率       | ✅ 更高                   | ❌ 多一次操作               |
+| const 成员 | ✅ 可以初始化             | ❌ 不能赋值                 |
+| 引用成员   | ✅ 可以初始化             | ❌ 不能赋值                 |
+
+> **结论：构造函数 + 初始化列表是 C++ 里创建对象的标准写法。**
+
+#### 3.3 `private:` 下面那两行是"声明"吗？
+
+是的，但更准确的说法是**成员变量声明**。
+
+```cpp
+class Point {
+private:
+    int x_, y_;   // ← 这是成员变量声明
+public:
+    Point(int x, int y) : x_(x), y_(y) {}  // ② 构造函数定义
+    int getX() const { return x_; }        // ③ 成员函数定义
+};
+```
+
+| 代码                        | 性质                                               |
+| --------------------------- | -------------------------------------------------- |
+| `int x_, y_;`               | 成员变量**声明**（同时隐含了类型、名称、访问权限） |
+| `Point(int x, int y) : ...` | 构造函数**定义**                                   |
+| `int getX() const { ... }`  | 成员函数**定义**（类内定义 = 隐式 inline）         |
+
+**`private` 的作用**：`private` **不是声明**，是**访问控制修饰符**：
+
+- `private:` → 后面的成员只能在**类内部**访问
+- `public:` → 后面成员可以在**类外部**访问
+
+```cpp
+Point p(1, 2);
+p.x_;        // ❌ 编译错误：x_ 是 private
+p.getX();    // ✅ OK：getX() 是 public
+```
+
+#### 3.4 整体串起来：对象长什么样？
+
+```cpp
+Point p(3, 4);
+```
+
+内存里 `p` 长这样：
+
+```
+p
+├── x_ = 3    (private, 只有类内方法能直接访问)
+└── y_ = 4    (private, 只有类内方法能直接访问)
+```
+
+外部代码只能通过 `public` 接口操作它：
+
+```cpp
+p.setX(10);      // ✅ 通过 public 方法修改
+int a = p.getX(); // ✅ 通过 public 方法读取
+```
+
+#### 3.5 一句话总结
+
+| 问题                          | 答案                                                     |
+| ----------------------------- | -------------------------------------------------------- |
+| `Point(int x, int y)` 是什么  | **构造函数**，创建对象时自动调用，负责初始化成员变量     |
+| `: x_(x), y_(y)` 是什么       | **初始化列表**，在对象创建时直接初始化成员，比赋值更高效 |
+| `private: int x_, y_;` 是什么 | **成员变量声明**，`private` 限制它们只能在类内部访问     |
+| 外部怎么用                    | 通过 `public` 成员函数（getter/setter）间接读写          |
+
+------
+
+### 四、延伸三：C 语言 struct 与数组退化
+
+#### 4.1 C 语言 struct 示例
+
+新建 `week2/thu_struct_c.c`：
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+// C 的 struct 没有成员函数，只有数据
+struct Student {
+    int id;
+    char name[20];
+    float score;
+};
+
+int main(void) {
+    struct Student s = {1001, "Alice", 92.5f};
+
+    // 普通变量用 . 访问成员
+    printf("id = %d, name = %s, score = %.1f\n", s.id, s.name, s.score);
+
+    // 指针用 -> 访问成员
+    struct Student *p = &s;
+    printf("via pointer -> id = %d\n", p->id);
+    p->score = 95.0f;                                 // 通过指针修改
+    printf("after modify -> score = %.1f\n", p->score);
+
+    // 动态分配一个 Student
+    struct Student *q = (struct Student *)malloc(sizeof(struct Student));
+    if (q != NULL) {
+        q->id = 1002;
+        // 字符串拷贝用 strcpy，不要直接 =
+        // q->name = "Bob";   // ❌ 数组不能直接赋值
+        q->score = 88.0f;
+        printf("malloc -> id = %d, score = %.1f\n", q->id, q->score);
+        free(q);
+    }
+    return 0;
+}
+```
+
+编译运行：`gcc -std=c11 thu_struct_c.c -o sc && ./sc`
+
+#### 4.2 一句话结论：为什么 `q->name = "Bob"` 不行？
+
+因为 **name 是数组**，数组**不能整体赋值**。
+
+```c
+q->name = "Bob";   // ❌ 编译错误
+```
+
+字符串 `"Bob"` 是字符串常量（类型是 `char[4]` / `char*`），你不能用 `=` 把一个地址或数组"塞进"另一个数组。
+
+#### 4.3 `name` 到底是什么？
+
+```c
+struct Student {
+    char name[20];   // ← 这是数组，不是指针
+};
+```
+
+在 `Student` 里，`name` 是**内嵌的 20 个 char 的连续内存**：
+
+```
+q
+├── id      (int)
+├── name    [20 个 char，直接存在结构体里]
+└── score   (float)
+```
+
+`name` **不是一个指针变量**，它是一块"已经分配好的内存"。
+
+#### 4.4 为什么 `=` 不行？
+
+C 语言规定：
+
+> **数组是不可修改的左值（array is not a modifiable lvalue）**
+
+| 操作                           | 是否允许 | 原因                   |
+| ------------------------------ | -------- | ---------------------- |
+| `int a[10]; a = ...;`          | ❌        | 数组整体不能赋值       |
+| `char name[20]; name = "Bob";` | ❌        | 同上                   |
+| `char *p; p = "Bob";`          | ✅        | p 是指针，可以指向别处 |
+| `int x; x = 10;`               | ✅        | 普通变量可以赋值       |
+
+`q->name = "Bob"` 本质上等价于：
+
+```c
+char name[20];
+name = "Bob";   // ❌ 数组名 name 是地址常量，不能当左值
+```
+
+#### 4.5 `"Bob"` 到底是什么？
+
+```c
+"Bob"
+```
+
+这是一个**字符串常量**，类型是：
+
+```
+const char[4]   // 'B','o','b','\0'
+```
+
+存储在**只读数据段**（`.rodata`），不是你 `malloc` 出来的堆内存。
+
+你不能用 `=` 把它"复制"到数组里，只能：
+
+- **逐字符拷贝**
+- **用库函数拷贝**
+
+#### 4.6 正确的做法
+
+**✅ 方法一：`strcpy`（最常用）**
+
+```c
+#include <string.h>   // ← 别忘了头文件
+
+strcpy(q->name, "Bob");
+```
+
+作用：把 `"Bob\0"` 逐个字符**拷贝**到 `q->name` 指向的内存里。
+
+```
+q->name: ['B', 'o', 'b', '\0', ?, ?, ...]
+```
+
+**✅ 方法二：`strncpy`（更安全）**
+
+```c
+strncpy(q->name, "Bob", sizeof(q->name) - 1);
+q->name[sizeof(q->name) - 1] = '\0';  // 手动补 \0
+```
+
+防止源字符串太长，溢出 `name[20]`。
+
+**✅ 方法三：逐个赋值（不实用但合法）**
+
+```c
+q->name[0] = 'B';
+q->name[1] = 'o';
+q->name[2] = 'b';
+q->name[3] = '\0';
+```
+
+#### 4.7 对比：如果 `name` 是指针，情况完全不同
+
+```c
+struct Student {
+    int id;
+    char *name;    // ← 指针，不是数组
+    float score;
+};
+```
+
+这时：
+
+```c
+q->name = "Bob";   // ✅ 合法，指针指向字符串常量
+```
+
+但代价是：
+
+| 问题           | 说明                       |
+| -------------- | -------------------------- |
+| 字符串在只读区 | 不能 `q->name[0] = 'T'`    |
+| 结构体拷贝时   | 两个结构体指向同一块字符串 |
+| 动态分配时     | 需要额外 `malloc` + `free` |
+
+所以你的代码里用 `char name[20]` 其实是**更安全、更常见**的写法。
+
+#### 4.8 对比 C++ 为什么没这个问题？
+
+C++ 里你几乎不会手写 `char name[20]`，而是：
+
+```cpp
+class Student {
+    std::string name;   // ← string 重载了 =，内部帮你管理内存
+};
+
+Student s;
+s.name = "Bob";   // ✅ string 的 operator= 做了深拷贝
+```
+
+C 没有 `std::string`，所以你得**手动管理字符串内存**，这就是 `strcpy` 存在的原因。
+
+#### 4.9 总结一句话
+
+> **q->name = "Bob" 不行，因为 name 是数组，数组不能整体赋值。必须用 strcpy 把字符串内容拷贝进去。**
+
+这是 C 语言里"数组 vs 指针"最核心的区别之一，搞明白这个，后面指针、函数传参、动态内存的坑会少踩一大半。
+
+------
+
+#### 4.10 数组退化（Array Decay）深入
+
+> **先给结论**：数组名在大多数表达式中会"退化"成指向首元素的指针，但有 3 种情况不会。
+
+##### 4.10.1 什么是"退化"？
+
+```c
+int arr[5] = {1, 2, 3, 4, 5};
+```
+
+`arr` 本身代表**整个数组**（20 字节，假设 int=4），但在大多数表达式中，编译器会把它当成：
+
+```c
+&arr[0]    // 指向第一个元素的指针，类型是 int*
+```
+
+这就是"退化"（decay）。
+
+##### 4.10.2 什么时候会退化（→ 指针）
+
+**① 赋值给指针**
+
+```c
+int *p = arr;      // arr 退化为 &arr[0]，类型是 int*
+p = arr + 1;       // arr 退化为 int*，+1 跳 4 字节
+```
+
+**② 作为函数参数**
+
+```c
+void foo(int arr[]) {
+    // arr 在这里已经是指针了！
+    sizeof(arr);    // ❌ 不是 20，是 8（64 位指针大小）
+}
+
+foo(arr);           // arr 退化为 int*
+```
+
+> **函数参数里的 int arr[] 和 int *arr 完全等价**，这是 C 语言的"语法糖"。
+
+**③ 算术运算**
+
+```c
+arr + 1;    // arr 退化为 int*，+1 跳到 &arr[1]
+```
+
+**④ 比较**
+
+```c
+if (arr == &arr[0])  // 相等，arr 退化为 &arr[0]
+```
+
+##### 4.10.3 什么时候**不会**退化（仍然是数组）
+
+**① `sizeof(arr)`**
+
+```c
+int arr[5];
+sizeof(arr);     // 20（整个数组的大小）
+sizeof(&arr[0]); // 8（指针大小）
+```
+
+> 如果退化了，`sizeof` 应该返回 8，但它返回了 20 → **没退化**
+
+**② `&arr`（取整个数组的地址）**
+
+```c
+int arr[5];
+printf("%p\n", arr);     // 首元素地址，类型是 int*
+printf("%p\n", &arr);    // 整个数组的地址，类型是 int(*)[5]
+```
+
+数值上 `arr` 和 `&arr` **一样**，但类型不同：
+
+```c
+arr + 1;     // 跳 4 字节（到 arr[1]）
+&arr + 1;    // 跳 20 字节（跳过整个数组！）
+```
+
+**③ 字符串初始化**
+
+```c
+char str[] = "hello";   // str 是数组，不是指针
+sizeof(str);             // 6（包含 '\0'）
+```
+
+对比：
+
+```c
+char *p = "hello";
+sizeof(p);    // 8（指针大小）
+```
+
+##### 4.10.4 一张表总结
+
+| 场景                | 数组名行为       | 结果类型    |
+| ------------------- | ---------------- | ----------- |
+| `int *p = arr`      | 退化为首元素指针 | `int*`      |
+| `foo(arr)` 函数传参 | 退化为指针       | `int*`      |
+| `arr + 1`           | 退化为指针       | `int*`      |
+| `sizeof(arr)`       | **不退化**       | 整个数组    |
+| `&arr`              | **不退化**       | `int(*)[5]` |
+| `char str[] = "hi"` | **不退化**       | `char[3]`   |
+
+##### 4.10.5 经典面试题追问
+
+**Q1：下面代码输出什么？**
+
+```c
+int arr[5] = {1, 2, 3, 4, 5};
+printf("%d\n", sizeof(arr));        // ?
+printf("%d\n", sizeof(arr + 0));    // ?
+```
+
+答案：
+
+- `sizeof(arr)` → `20`（不退化）
+- `sizeof(arr + 0)` → `8`（退化成 `int*`，指针大小）
+
+> **追问**：为什么 `arr + 0` 就退化了？
+> 因为 `+` 是算术运算，一旦参与算术运算，数组名就退化为指针，`sizeof` 拿到的是指针的大小。
+
+**Q2：为什么 `arr` 和 `&arr` 打印出来地址一样？**
+
+```c
+printf("%p %p\n", arr, &arr);
+```
+
+因为：
+
+- `arr` → 首元素地址 = 数组起始地址
+- `&arr` → 整个数组的地址 = 也是数组起始地址
+
+**数值相同，语义不同。**
+
+> **追问**：那 `arr + 1` 和 `&arr + 1` 还一样吗？
+> 不一样！`arr + 1` 跳 4 字节（到 `arr[1]`），`&arr + 1` 跳 20 字节（跳过整个数组）。
+
+**Q3：为什么函数里 `sizeof(arr)` 不等于数组大小？**
+
+```c
+void foo(int arr[]) {
+    printf("%zu\n", sizeof(arr));  // 8，不是 20
+}
+```
+
+因为参数里的 `int arr[]` **就是 int *arr**，退化已经发生，函数里拿到的只是指针。
+
+> **追问**：那如果我想在函数里拿到数组大小怎么办？
+> 两个办法：
+> ① 额外传一个 `int size` 参数（这是 C 语言的经典写法，也是 408 数据结构的标准写法）；
+> ② 传数组的引用 `void foo(int (&arr)[5])`（C++ 特有，保留了数组的大小信息）。
+
+##### 4.10.6 跟 Student 例子串起来
+
+```c
+struct Student {
+    char name[20];
+};
+```
+
+- `name` 是数组 → `sizeof(s.name)` = 20 ✅（没退化）
+- `q->name` 在函数参数里退化 → `sizeof(q->name)` 在 `foo(struct Student s)` 里仍然是 20（因为是成员访问，不是参数传递）
+- `q->name` 退化为 `char*` 的情况：`func(q->name)` 时退化为 `char*`
+
+------
+
+### 五、延伸四：C vs C++ 对比要点
+
+| 对比项         | C                       | C++                                |
+| :------------- | :---------------------- | :--------------------------------- |
+| struct 关键字  | 必须写 `struct Student` | 可直接 `Student`（已注入名字空间） |
+| 成员函数       | ❌ 没有                  | ✅ 有（类成员函数）                 |
+| 访问成员       | `.` 和 `->`             | 同样 `.` 和 `->`                   |
+| const 成员函数 | ❌ 没有                  | ✅ `int getX() const`               |
+| 成员初始化     | 定义时整体赋值或逐个    | 构造函数                           |
+
+> **结论：今天 C++ 的 `const` 成员函数是纯 C++ 特性，C 里做不了。** 但 `.` 和 `->` 的用法两边一致。
+
+------
+
+### 六、延伸五：算法副线——LeetCode 209 长度最小的子数组
+
+#### 6.1 题目描述
+
+给定一个含有 `n` 个正整数的数组和一个正整数 `target`，找出**和 ≥ target 的长度最小的连续子数组**，并返回其长度。如果不存在则返回 0。
+
+示例：`nums = [2,3,1,2,4,3], target = 7` → 输出 `2`（子数组 `[4,3]`）
+
+#### 6.2 滑动窗口解法（O(n)）
+
+**思路**：用两个指针 `left`、`right` 维护窗口 `[left, right]`。`right` 扩张累加，`sum ≥ target` 时收缩 `left` 找最小长度。
+
+**C++ 版**
+
+```cpp
+class Solution {
+public:
+    int minSubArrayLen(int target, vector<int>& nums) {
+        int n = nums.size(), left = 0, sum = 0, ans = n + 1;
+        for (int right = 0; right < n; right++) {
+            sum += nums[right];
+            while (sum >= target) {
+                ans = min(ans, right - left + 1);
+                sum -= nums[left++];
+            }
+        }
+        return ans == n + 1 ? 0 : ans;
+    }
+};
+```
+
+**C 版（数组 + 长度参数）**
+
+```c
+int minSubArrayLen(int target, int* nums, int numsSize) {
+    int left = 0, sum = 0, ans = numsSize + 1;
+    for (int right = 0; right < numsSize; right++) {
+        sum += nums[right];
+        while (sum >= target) {
+            int len = right - left + 1;
+            if (len < ans) ans = len;
+            sum -= nums[left++];
+        }
+    }
+    return ans == numsSize + 1 ? 0 : ans;
+}
+```
+
+#### 6.3 三个易错点
+
+1. **`ans` 初始值**：设为 `n + 1`，比最大可能长度还大，保证第一次找到时一定更新。
+2. **没找到返回 0**，不是返回 `ans`。
+3. **收缩用 `while` 不是 `if`**：满足条件后要一直缩，才能找到"最小"。
+
+ Q1: `ans` 初值为什么是 `n + 1` 而不是 `INT_MAX`？ 
+
+```cpp
+int ans = n + 1;
+```
+
+- 最短子数组长度最多是 `n` 
+- `n + 1` 是一个"不可能达到的值"，天然表示"还没找到" 
+- 比 `INT_MAX` 更安全（避免 `min(ans, ...)` 溢出风险） 
+
+ Q2: 为什么 `while` 不是 `if`？ 
+
+```cpp
+while (sum >= target) { ... }   // ← while，不是 if
+```
+
+因为收缩可能不止一步。比如 `sum` 远大于 `target`，需要多次 `left++` 才能退出。
+
+ Q3: 如果数组有负数，这个算法还成立吗？ 
+
+❌ **不成立**。有负数时 `sum` 不单调，收缩 `left` 后 `sum` 可能反而增大，无法保证"缩到极限就是最优"。此时需要前缀和 + 二分，时间复杂度 O(n log n)。
+
+#### 6.4 为什么滑动窗口不会遗漏？（证明）
+
+因为所有元素都是正数，`sum` 单调递增。对每个 `right`，算法找到的是**以 `right` 为右端点的最短合法子数组**。遍历所有 `right`，全局最优解一定被覆盖。
+
+#### 6.5 前缀和 + 二分查找（O(n log n)）
+
+当数组有负数时滑动窗口失效，可用此方法。构建前缀和数组 `preSum`（严格递增），对每个起点 `i`，二分查找最小的 `j` 使得 `preSum[j+1] - preSum[i] ≥ target`。
+
+```cpp
+class Solution {
+public:
+    int minSubArrayLen(int target, vector<int>& nums) {
+        int n = nums.size();
+        vector<int> preSum(n + 1, 0);
+        for (int i = 0; i < n; i++)
+            preSum[i + 1] = preSum[i] + nums[i];
+        int ans = n + 1;
+        for (int i = 0; i < n; i++) {
+            int need = target + preSum[i];
+            auto it = lower_bound(preSum.begin() + i + 1, preSum.end(), need);
+            if (it != preSum.end()) {
+                int j = it - preSum.begin() - 1;
+                ans = min(ans, j - i + 1);
+            }
+        }
+        return ans == n + 1 ? 0 : ans;
+    }
+};
+```
+
+|          | 滑动窗口   | 前缀和+二分                |
+| -------- | ---------- | -------------------------- |
+| 时间     | **O(n)** ✅ | O(n log n)                 |
+| 空间     | O(1) ✅     | O(n)                       |
+| 有负数时 | ❌ 不能用   | ❌ 也不能用（前缀和不递增） |
+
+> **实际刷题/面试**：滑动窗口是最优解，前缀和+二分是"退而求其次"但思路更清晰的方案。
+
+------
+
+### 七、今日总结
+
+| 主线             | 要点                                                         |
+| ---------------- | ------------------------------------------------------------ |
+| const 成员函数   | `const` 放在函数末尾，锁住对象不可修改；const 对象只能调用 const 函数 |
+| 延伸一：重载     | 同名不同参，编译期决定；const 版本与非 const 版本可构成重载  |
+| 延伸二：构造函数 | 初始化列表比赋值高效，const 成员必须用初始化列表             |
+| 延伸三：数组退化 | 赋值/传参/算术时退化成指针；`sizeof`/`&arr`/初始化时不退化   |
+| 延伸四：C vs C++ | const 成员函数、构造函数都是 C++ 特性，C 没有                |
+| 算法             | 滑动窗口 O(n)，正数数组的最优解                              |
+
+
 
 ---
 
