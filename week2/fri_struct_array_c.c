@@ -31,7 +31,7 @@ int main(void)
     for (int p = 0; p < n; p++)
     {
         // 条件改为 p < n
-        printf("id=%-4d name=%-10s score=%.1f", stus[p].id, stus[p].name, stus[p].score);
+        printf("id=%-4d name=%-10s score=%.1f\n", stus[p].id, stus[p].name, stus[p].score);
     }
     return 0;
 }

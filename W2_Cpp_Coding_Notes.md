@@ -606,19 +606,19 @@ int main() {
     int *p = &a;
 
     cout << "=== 基本操作 ===" << endl;
-    cout << "a 的值: " << a << endl;
-    cout << "a 的地址: " << &a << endl;
-    cout << "p 存储的地址: " << p << endl;
-    cout << "p 指向的值: " << *p << endl;
-    cout << "p 自己的地址: " << &p << endl;
+    cout << "a 的值: " << a << endl;//10
+    cout << "a 的地址: " << &a << endl;//0xxxx
+    cout << "p 存储的地址: " << p << endl;//0xxxx
+    cout << "p 指向的值: " << *p << endl;//10
+    cout << "p 自己的地址: " << &p << endl;//011xxx
 
     cout << "\n=== 大小对比 ===" << endl;
-    cout << "sizeof(int): " << sizeof(int) << endl;
-    cout << "sizeof(int*): " << sizeof(int*) << endl;
-    cout << "sizeof(double*): " << sizeof(double*) << endl;
-    cout << "sizeof(char*): " << sizeof(char*) << endl;
-    cout << "sizeof(p): " << sizeof(p) << endl;
-    cout << "sizeof(*p): " << sizeof(*p) << endl;
+    cout << "sizeof(int): " << sizeof(int) << endl;//4
+    cout << "sizeof(int*): " << sizeof(int*) << endl;//8
+    cout << "sizeof(double*): " << sizeof(double*) << endl;//8
+    cout << "sizeof(char*): " << sizeof(char*) << endl;//8
+    cout << "sizeof(p): " << sizeof(p) << endl;//8
+    cout << "sizeof(*p): " << sizeof(*p) << endl;//4
 
     cout << "\n=== 空指针测试 ===" << endl;
     int *q = nullptr;
@@ -1088,7 +1088,7 @@ int removeElement(int* nums, int numsSize, int val) {
 - `const` 紧贴 `*` 左边 → 锁住"指向的东西" → `*p` 只读
 - `const` 紧贴 `*` 右边（即变量名左边） → 锁住"指针自己" → `p` 不可改指向
 
-#### ① `const int *p` —— 指向常量的指针
+#### ① `const int *p` —— 指向常量的指针（int const *p等价）
 
 ```cpp
 int a = 10, b = 20;
@@ -3344,30 +3344,541 @@ n = 3
 7 6 5
 ```
 
-------
-
-### 八、今日收尾 ✅
-
-对照检查，全部打勾后 commit：
-
-- [x] 引用 vs 指针对比表写完（含能否为空、能否重绑、是否占内存、汇编差异）
-- [x] 验证了"引用不可重绑"（实验 `r = b` 是赋值不是改绑）
-- [x] 认识了右值引用 `int &&rr = 10;` 和 `std::move` 的动机
-- [x] AI 出的选择题及答案写进笔记
-- [x] C 语言结构体数组 `scanf`/`printf` 练习写完并测试通过
-- [x] LC 59 C++ 版、C 版均已通过
-- [ ] `learning-log` 仓库 commit 1 次（建议信息：`week2-fri: ref vs ptr + rvalue ref + LC59 spiral matrix`）
-
-**为周末做铺垫（1 分钟即可）**：周六是**复习日**——不看笔记重写 swap 的引用版和指针版、const 的三个实验。这周你已经把引用、指针、`const`（三种写法 + const 成员函数）、右值引用全部过了一遍，周六把它们串成一张完整卡片，就是本周最扎实的收官。
-
-明天（周六）的任务量会比今天轻，是刻意的：把前五天写过的代码重新手写一遍，比再看十遍笔记都有效。加油，本周已进入下半场 💪
-
 ---
 
-## 第二周（Day 6）：本周复习与代码重写 📝 待补充
+## 第二周（Day 6）：本周复习与代码重写 
 
-> 不看笔记重写本周所有代码（swap、const 实验、二分查找）。
-> 用 C 语言重写二分查找，巩固指针和数组传参。
+今天是周六复习日，边复习之前的内容，边重写代码，边总结笔记。以下为今日记录的完整内容。
+
+------
+
+### 一、sizeof 速查表（复习）
+
+**C / C++ 常用类型 sizeof 速查表**（单位：字节），先给主流平台结论，再拆指针/引用/特殊点。
+
+#### 1. 基本数据类型（主流平台）
+
+|                   类型                   |       32 位系统       | 64 位 Windows (LLP64) | 64 位 Linux/macOS (LP64) |
+| :--------------------------------------: | :-------------------: | :-------------------: | :----------------------: |
+|             `bool` / `_Bool`             |           1           |           1           |            1             |
+| `char` / `signed char` / `unsigned char` |           1           |           1           |            1             |
+|             `char8_t`(C++20)             |           1           |           1           |            1             |
+|                `char16_t`                |           2           |           2           |            2             |
+|                `char32_t`                |           4           |           4           |            4             |
+|                `wchar_t`                 |  2（Win）/4（Linux）  |           2           |            4             |
+|        `short` / `unsigned short`        |           2           |           2           |            2             |
+|          `int` / `unsigned int`          |           4           |           4           |            4             |
+|         `long` / `unsigned long`         |           4           |           4           |            8             |
+|    `long long` / `unsigned long long`    |           8           |           8           |            8             |
+|                 `float`                  |           4           |           4           |            4             |
+|                 `double`                 |           8           |           8           |            8             |
+|              `long double`               | 8/12/16（编译器相关） |  8（MSVC）/16（GCC）  |        16（GCC）         |
+
+> 标准只保证：
+>
+> ```
+> 1 == sizeof(char) <= sizeof(short) <= sizeof(int) <= sizeof(long) <= sizeof(long long)
+> ```
+
+#### 2. 指针（Pointer）
+
+指针大小 **只看地址宽度**，和指向什么类型无关（同平台所有普通指针一样大）：
+
+| 平台  | `T*`（任意类型指针） | `void*` | 函数指针 |
+| :---: | :------------------: | :-----: | :------: |
+| 32 位 |          4           |    4    |    4     |
+| 64 位 |          8           |    8    |    8     |
+
+特殊情况：
+
+- 类成员函数指针：通常 **8 或 16 字节**（依赖 ABI，可能含 this 调整信息）
+- 指向成员变量的指针：通常 8 字节（64 位）
+
+```cpp
+sizeof(int*)      == sizeof(double*) == sizeof(void*)
+```
+
+#### 3. 引用（Reference）
+
+引用是**别名**，不是独立对象：
+
+| 写法              | sizeof 结果                | 说明                                  |
+| ----------------- | -------------------------- | ------------------------------------- |
+| `sizeof(T&)`      | `sizeof(T)`                | 语义上不占额外空间                    |
+| 局部引用变量      | 通常不额外占空间（被优化） | 编译期绑定原对象                      |
+| 结构体/类里存引用 | 实际底层常占 1 个指针大小  | 但 `sizeof(ref成员)` 仍是 `sizeof(T)` |
+
+```cpp
+int a = 0;
+int& r = a;
+sizeof(r);      // == sizeof(int) == 4
+sizeof(&r);     // == sizeof(int*) == 8 (64位)
+```
+
+> 逻辑上：引用不占空间
+>
+> 物理实现：很多时候编译器用"常量指针"实现，成员里可能占指针大小
+
+#### 4. 复合类型
+
+| 类型            | 大小规律                      |
+| --------------- | ----------------------------- |
+| 数组 `T[N]`     | `sizeof(T) * N`               |
+| 数组作函数参数  | 退化为指针（64位=8）          |
+| 结构体 `struct` | 成员和 + 内存对齐填充         |
+| 联合体 `union`  | 最大成员 + 对齐               |
+| 带虚函数类      | 对象大小 + 虚表指针（64位+8） |
+| 空类/空结构体   | 通常 1（占位，保证唯一地址）  |
+
+#### 5. 固定宽度类型（跨平台推荐）
+
+`<cstdint>` / `<stdint.h>`：
+
+| 类型                   |           大小 |
+| ---------------------- | -------------: |
+| `int8_t` / `uint8_t`   |              1 |
+| `int16_t` / `uint16_t` |              2 |
+| `int32_t` / `uint32_t` |              4 |
+| `int64_t` / `uint64_t` |              8 |
+| `size_t`               | 32位=4，64位=8 |
+| `ptrdiff_t`            |     同指针宽度 |
+
+#### 6. 一句话总结
+
+- `char` 永远 1 字节
+- `int` 现代平台基本 4 字节
+- `long` 在 Win64 是 4，Linux64 是 8（坑点）
+- 指针：32位 4，64位 8
+- 引用：`sizeof(T&)==sizeof(T)`，语义不占空间
+- 真要跨平台定长 → 用 `int32_t` / `int64_t` / `size_t`
+
+------
+
+### 二、内存对齐与结构体大小计算（复习）
+
+#### 1. 内存对齐核心规则（C/C++）
+
+> 对齐是为了**CPU 访问效率**，不同平台/编译器规则基本一致，但细节有差异。
+
+**基本对齐规则**
+
+| 规则               | 说明                                                         |
+| ------------------ | ------------------------------------------------------------ |
+| **成员对齐**       | 每个成员起始地址必须是 `min(自身大小, 编译器默认对齐值)` 的整数倍 |
+| **结构体整体对齐** | 结构体总大小必须是 `max(所有成员对齐值)` 的整数倍            |
+| **编译器默认对齐** | MSVC 默认 8；GCC/Clang 默认 8（可用 `#pragma pack` 修改）    |
+
+**常用类型的"自然对齐值"**
+
+| 类型        | 大小 | 自然对齐值 |
+| ----------- | ---: | ---------: |
+| `char`      |    1 |          1 |
+| `short`     |    2 |          2 |
+| `int`       |    4 |          4 |
+| `long`      |  4/8 |        4/8 |
+| `long long` |    8 |          8 |
+| `float`     |    4 |          4 |
+| `double`    |    8 |          8 |
+| 指针        |  4/8 |        4/8 |
+
+#### 2. 结构体大小计算示例（64 位，默认对齐=8）
+
+**示例 1：最简单的情况**
+
+```cpp
+struct S1 {
+    char a;     // 1
+    int b;      // 4
+    short c;    // 2
+};
+```
+
+手动计算：
+
+| 成员    | 大小 |  偏移 | 说明                           |
+| ------- | ---: | ----: | ------------------------------ |
+| `a`     |    1 |     0 | 从 0 开始                      |
+| *(pad)* |    3 |   1-3 | `int` 对齐到 4 的倍数          |
+| `b`     |    4 |   4-7 |                                |
+| `c`     |    2 |   8-9 |                                |
+| *(pad)* |    2 | 10-11 | 整体对齐到 4（`int` 的对齐值） |
+
+```
+sizeof(S1) = 12
+```
+
+**示例 2：成员顺序不同，大小不同！**
+
+```cpp
+struct S2 {
+    char a;     // 1
+    short b;    // 2
+    int c;      // 4
+};
+```
+
+| 成员    | 大小 | 偏移 |
+| ------- | ---: | ---: |
+| `a`     |    1 |    0 |
+| *(pad)* |    1 |    1 |
+| `b`     |    2 |  2-3 |
+| `c`     |    4 |  4-7 |
+
+```
+sizeof(S2) = 8   // ← 比 S1 小了 4 字节！
+```
+
+> **结论：把大成员放后面，或按大小从大到小排列，能减少填充。**
+
+**示例 3：含 `double` / 指针**
+
+```cpp
+struct S3 {
+    char a;     // 1
+    double b;   // 8
+    int c;      // 4
+};
+```
+
+| 成员    | 大小 |  偏移 |
+| ------- | ---: | ----: |
+| `a`     |    1 |     0 |
+| *(pad)* |    7 |   1-7 |
+| `b`     |    8 |  8-15 |
+| `c`     |    4 | 16-19 |
+| *(pad)* |    4 | 20-23 |
+
+```
+sizeof(S3) = 24
+```
+
+**示例 4：嵌套结构体**
+
+```cpp
+struct Inner {
+    short x;    // 2
+    int y;      // 4
+};              // sizeof(Inner) = 8
+
+struct Outer {
+    char a;     // 1
+    Inner b;    // 8
+    double c;   // 8
+};
+```
+
+| 成员    | 大小 |  偏移 |
+| ------- | ---: | ----: |
+| `a`     |    1 |     0 |
+| *(pad)* |    1 |     1 |
+| `b`     |    8 |  4-11 |
+| `c`     |    8 | 12-19 |
+
+```
+sizeof(Outer) = 24
+```
+
+**示例 5：含数组成员**
+
+```cpp
+struct S4 {
+    int a;          // 4
+    char b[5];      // 5
+    short c;        // 2
+};
+```
+
+| 成员 | 大小 |  偏移 |
+| ---- | ---: | ----: |
+| `a`  |    4 |   0-3 |
+| `b`  |    5 |   4-8 |
+| `c`  |    2 | 10-11 |
+
+```
+sizeof(S4) = 12
+```
+
+**示例 6：含位域（bit-field）**
+
+```cpp
+struct S5 {
+    unsigned int a : 3;   // 3 bits
+    unsigned int b : 5;   // 5 bits
+    unsigned int c : 10;  // 10 bits
+    int d;                // 4 bytes
+};
+
+```
+
+| 成员    | 说明                                   |
+| ------- | -------------------------------------- |
+| `a,b,c` | 共用第一个 `int`（32 bits），占 4 字节 |
+| `d`     | 对齐到 4                               |
+
+```
+sizeof(S5) = 8
+
+```
+
+**示例 7：含虚函数的类**
+
+```cpp
+struct S6 {
+    char a;           // 1
+    virtual void f() {} // 虚表指针
+};
+
+```
+
+| 成员    | 大小 | 偏移 |
+| ------- | ---: | ---: |
+| `a`     |    1 |    0 |
+| *(pad)* |    7 |  1-7 |
+| vptr    |    8 | 8-15 |
+
+```
+sizeof(S6) = 16
+```
+
+**示例 8：`#pragma pack` 改变对齐**
+
+```cpp
+#pragma pack(1)
+struct Packed {
+    char a;     // 1
+    int b;      // 4
+    short c;    // 2
+};
+#pragma pack()
+```
+
+```
+sizeof(Packed) = 1 + 4 + 2 = 7   // 无填充
+```
+
+#### 3. 完整对照表（64 位，默认对齐=8）
+
+| 结构体   | 成员排列            | sizeof | 填充字节 |
+| -------- | ------------------- | -----: | -------: |
+| `S1`     | `char,int,short`    |     12 |        5 |
+| `S2`     | `char,short,int`    |      8 |        1 |
+| `S3`     | `char,double,int`   |     24 |       11 |
+| `S4`     | `int,char[5],short` |     12 |        3 |
+| `S5`     | `int位域×3,int`     |      8 |        0 |
+| `S6`     | `char + vtable`     |     16 |        7 |
+| `Packed` | `pack(1)`           |      7 |        0 |
+
+#### 4. 实用技巧 & 常见坑
+
+| 场景             | 建议                                              |
+| ---------------- | ------------------------------------------------- |
+| 减少结构体大小   | 按大小从大到小排列成员                            |
+| 网络/文件序列化  | 用 `#pragma pack(1)` 或 `__attribute__((packed))` |
+| 跨平台二进制兼容 | 避免直接 `memcpy` 结构体，用固定宽度类型          |
+| 检查对齐         | `alignof(T)` / `_Alignof(T)`                      |
+| 强制对齐         | `alignas(16) struct Foo {}`                       |
+| 查看偏移         | `offsetof(struct S, member)`                      |
+
+#### 5. 快速计算口诀
+
+> **"对齐看自己，整体看最大，排好顺序省空间"**
+
+------
+
+### 三、今日重写错误整理
+
+#### 1. tue_malloc_array.c 中的错误
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void){
+    int size=5;
+    int *array=(int *)malloc(size*sizeof(int));
+
+    if(array==NULL){
+        printf("数组malloc失败！");
+        return 1;
+    }
+
+    for (int i=0;i<size;i++){
+        *(array+i)=i+1;
+    }
+    printf("打印数组array:\n");
+    for(int j=0;j<size;j++){
+        printf("%d ",*(array+j));
+
+    }
+    printf("\n");
+    // 指针运算：arr+1 跳过一个 int 的距离（4 字节）
+    printf("arr = %p, arr+1 = %p, 差值 = %ld 字节\n",
+           (void *)array, (void *)(array + 1),
+           (char *)(array + 1) - (char *)array);
+    free(array);
+    array=NULL;
+    return 0;
+}
+```
+
+第一次运行时，将`if(array==NULL){`误写成了`if(array=NULL){`导致段错误
+
+![](assets/Code_rT521kuPoI.png)
+
+**什么是段错误？**
+
+段错误是操作系统给程序发出的"终止信号"。当你的程序尝试访问它没有权限访问的内存地址时（比如解引用空指针、访问越界、修改只读内存等），操作系统为了保护系统安全，会直接把程序强制杀掉。
+
+#### 2. 重写 wed_const.cpp 时发现的 const 写法
+
+在重写 `wed_const.cpp` 时，我发现了一个自己学习时没遇到的情况：
+
+**三种写法的含义**
+
+| 写法           | 含义                                       | 能否修改 `*p`（指向的值） | 能否修改 `p`（指针本身） |
+| -------------- | ------------------------------------------ | ------------------------- | ------------------------ |
+| `const int *p` | **指向常量的指针**（pointer to const int） | ❌ 不能                    | ✅ 能                     |
+| `int const *p` | 同上，与上一行**完全等价**                 | ❌ 不能                    | ✅ 能                     |
+| `int *const p` | **常量指针**（const pointer to int）       | ✅ 能                      | ❌ 不能                   |
+
+学习时我只注明了写法1，3的区别，但重写时我不自觉地写出了第二种写法。
+
+**为什么 `*` 的位置可以多变？**
+
+##### 本质：`const` 修饰的是"它左边最近的类型"
+
+C/C++ 的声明语法遵循一个规则：**const 修饰它左边紧挨着的类型**。但如果左边没有类型，则修饰它右边的类型。
+
+- 在 `const int *p` 中：`const` 左边没有东西，所以它修饰右边的 `int`，即 `int` 是常量，因此这是一个"指向 `const int` 的指针"。
+- 在 `int const *p` 中：`const` 左边是 `int`，所以它修饰 `int`，与上面等价。
+- 在 `int *const p` 中：`const` 左边是 `*`（注意：这里的 `*` 是声明的一部分，表示"指针"），所以它修饰的是"指针本身"，即 `p` 是一个常量指针。
+
+##### 为什么允许 `const int` 和 `int const` 两种顺序？
+
+这是历史遗留和语法灵活性。C 语言早期就允许类型限定符（`const`、`volatile`）放在类型名前或后，只要逻辑一致。后来 C++ 沿用了这一特性。所以 `const int` 和 `int const` 完全等价，你可以根据个人喜好选择。很多人喜欢把 `const` 放在右边（`int const`），因为这样更符合"从右向左读"的习惯。
+
+##### 记忆口诀
+
+**"从右向左读，const 修饰它最近的东西"**。
+
+- `int const *p`：从右向左：`p` 是一个指针，指向一个 `const int`。
+- `int *const p`：从右向左：`p` 是一个 `const` 指针，指向一个 `int`。
+
+或者更简单的规则：**看 const 和 \* 的相对位置**：
+
+- `const` 在 `*` 左边 → 修饰指向的对象（指针所指的内容不可变）。
+- `const` 在 `*` 右边 → 修饰指针本身（指针不可变）。
+
+#### 3. 总结
+
+| 写法                            | 通俗名称           | 可变性             |
+| ------------------------------- | ------------------ | ------------------ |
+| `const int *p` / `int const *p` | 指向常量的指针     | 值不可改，指向可改 |
+| `int *const p`                  | 常量指针           | 指向不可改，值可改 |
+| `const int *const p`            | 指向常量的常量指针 | 值和指向都不可改   |
+
+之所以 `*` 的位置多变，是因为 `const` 可以灵活放置，但含义取决于它修饰的对象（是 `int` 还是指针本身）。掌握"从右向左读"或"看 `const` 与 `*` 的相对位置"就能轻松分辨。
+
+#### 4. 今日手写学生成绩录入与排序.c
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+struct Student{
+    int id;
+    char name[20];
+    int score;
+};
+
+
+// 比较函数：按成绩从高到低
+int cmp(const void *a, const void *b) {
+    int ia = ((const struct Student *)a)->score;
+    int ib = ((const struct Student *)b)->score;
+    if (ia < ib) return 1;    // 降序
+    if (ia > ib) return -1;
+    return 0;
+}
+
+
+int main(void){
+    int total=0;
+    printf("请输入学生人数：\n");
+    scanf("%d",&total);
+    struct Student*array=(struct Student*)malloc(total*sizeof(struct Student));
+    if (array==NULL){printf("malloc failed\n"); return 1;}
+    printf("下面开始录入学生成绩：\n");
+    printf(" id | name | score\n");
+    for(int i=0;i<total;i++){
+        scanf("%d %19s %d",&array[i].id,array[i].name,&array[i].score);
+    }
+
+    qsort(array,total,sizeof(struct Student),cmp);
+    
+    printf("按分数由高到低排序后输出名单如下：\n");
+    printf(" id | name | score\n");
+    for(int i=0;i<total;i++){
+        printf("%-5d %-5s %d\n",array[i].id,array[i].name,array[i].score);
+    }//%-5d 和 %-5s 中 5 是最小宽度，如果名字长度超过 5，%s 会完整打印（不会截断）
+    free(array);
+    array=NULL;
+    return 0;
+}
+```
+
+**注：`qsort`函数**
+
+`qsort` 是 **C 标准库的内置函数**，定义在 `<stdlib.h>` 头文件中。它实现了通用的快速排序（实际实现可能混合其他排序算法，但接口是标准的）。
+
+##### 函数原型
+
+```c
+void qsort(void *base, size_t nmemb, size_t size,
+           int (*compar)(const void *, const void *));
+```
+
+##### 参数说明
+
+| 参数     | 含义                                                |
+| -------- | --------------------------------------------------- |
+| `base`   | 待排序数组的首地址（`void*`，可传入任意类型指针）   |
+| `nmemb`  | 数组中元素的个数                                    |
+| `size`   | 每个元素的大小（字节数），通常用 `sizeof(元素类型)` |
+| `compar` | 比较函数指针，用于定义排序规则                      |
+
+##### 比较函数写法
+
+比较函数接收两个 `const void*` 参数，返回：
+
+- 负值：第一个参数应排在第二个之前（升序）
+- 零：相等
+- 正值：第一个参数应排在第二个之后
+
+例如，对 `int` 数组升序排序的比较函数：
+
+```c
+int cmp(const void *a, const void *b) {
+    return *(int*)a - *(int*)b;
+}
+```
+
+##### 在代码中的应用
+
+```c
+qsort(array, total, sizeof(struct Student), cmp);
+```
+
+- `array`：结构体数组首地址
+- `n`：学生数量
+- `sizeof(struct Student)`：每个结构体的大小
+- `cmp`：你自己实现的比较函数（按 `id`、`score` 或 `name` 排序）
+
+##### 注意事项
+
+- `qsort` 是不稳定的排序（相等的元素相对顺序可能改变）。
+- 比较函数必须严格遵循 `const void*` 签名，否则编译器会报类型不匹配。
+- 由于 `qsort` 使用 `void*`，它适用于任何数据类型，但需要手动转换指针类型。
 
 ---
 
